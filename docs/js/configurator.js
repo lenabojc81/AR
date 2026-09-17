@@ -34,7 +34,7 @@ let carRoots = {};
 
 // Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a2e);
+scene.background = new THREE.Color(0x2d2016);
 
 // Camera
 const camera = new THREE.PerspectiveCamera(
@@ -99,6 +99,22 @@ function buildSelector() {
     });
 }
 
+function buildDots() {
+    const dotsContainer = document.getElementById('scroll-dots');
+    CAR_NODES.forEach((_, index) => {
+        const dot = document.createElement('div');
+        dot.className = 'scroll-dot' + (index === 0 ? ' active' : '');
+        dot.addEventListener('click', () => selectCar(index));
+        dotsContainer.appendChild(dot);
+    });
+}
+
+function updateDots(index) {
+    document.querySelectorAll('.scroll-dot').forEach((dot, i) => {
+        dot.classList.toggle('active', i === index);
+    });
+}
+
 // Update which card looks selected
 function updateSelectedCard(index) {
     document.querySelectorAll('.car-card').forEach((card, i) => {
@@ -118,6 +134,7 @@ function selectCar(index) {
     currentIndex = index;
     localStorage.setItem('selectedCarIndex', index);
     updateSelectedCard(index);
+    updateDots(index);
 
     CAR_NODES.forEach((name) => {
         if (carRoots[name]) carRoots[name].visible = false;
@@ -171,4 +188,5 @@ function animate() {
 }
 
 buildSelector();
+buildDots();
 animate();
