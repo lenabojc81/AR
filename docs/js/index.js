@@ -147,10 +147,6 @@ function selectCar(index) {
 
         let meshCount = 0;
         scene.traverse(n => { if (n.isMesh && n.visible) meshCount++; });
-        console.log('visible meshes after selectCar:', meshCount);
-        console.log('camera position:', camera.position);
-        console.log('camera looking at:', controls.target);
-        console.log('canvas size:', canvasWrapper.clientWidth, canvasWrapper.clientHeight);
     }
 }
 
@@ -173,8 +169,6 @@ loader.load(
                 console.warn('Could not find node:', name);
             }
         });
-
-        console.log('Car roots:', Object.keys(carRoots));
 
         const saved = localStorage.getItem('selectedCarIndex');
         const startIndex = saved !== null ? parseInt(saved) : 0;
