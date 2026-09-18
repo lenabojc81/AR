@@ -313,6 +313,44 @@ function normalizeObstacle(model) {
     return holder;
 }
 
+// Render an obstacle once, from the waist up, as an image for the menus
+function renderPortrait(template) {
+    const size = 480;   // 160 px shown x3 for sharp phone screens
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setSize(size, size);
+
+    const s = new THREE.Scene();
+    s.add(new THREE.HemisphereLight(0xfff4e0, 0x2d2016, 1.2));
+    const light = new THREE.DirectionalLight(0xffffff, 1.8);
+    light.position.set(2, 4, 6);
+    s.add(light);
+
+    const model = template.clone();
+    s.add(model);
+    model.updateMatrixWorld(true);
+
+    // Frame from the waist (36% up from the feet) to just above the head
+    const box = new THREE.Box3().setFromObject(model);
+    const h = box.max.y - box.min.y;
+    const bottom = box.min.y + h * 0.40;
+    const top = box.max.y + h * 0.02;
+    const frameH = top - bottom;
+    const cx = (box.min.x + box.max.x) / 2;
+    const cy = (top + bottom) / 2;
+
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+    const dist = (frameH / 2) / Math.tan(THREE.MathUtils.degToRad(15)) * 1.05;
+    cam.position.set(cx, cy + frameH * 0.05, box.max.z + dist);
+    cam.lookAt(cx, cy, 0);
+
+    r.render(s, cam);
+    const url = r.domElement.toDataURL('image/png');
+
+    r.dispose();
+    r.forceContextLoss();   // free the extra WebGL context right away
+    return url;
+}
+
 // Load every model + its sound
 Promise.all(
     OBSTACLE_TYPES.map((type) =>
@@ -331,7 +369,16 @@ Promise.all(
     )
 ).then((templates) => {
     const loaded = templates.filter(Boolean);
-    if (loaded.length) obstacleTemplates = loaded;
+    if (loaded.length) {
+        obstacleTemplates = loaded;
+
+        // Show the first obstacle on the start and game-over screens
+        const portrait = renderPortrait(loaded[0]);
+        document.querySelectorAll('.hero-portrait').forEach((img) => {
+            img.src = portrait;
+            img.hidden = false;
+        });
+    }
     console.log('Obstacle types loaded:', loaded.length);
 });
 

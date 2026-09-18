@@ -168,6 +168,8 @@ html, body {
     font-weight: 800;
     line-height: 1.05;
     letter-spacing: -0.02em;
+    padding-bottom: 0.12em;
+    margin-bottom: -0.12em;
     background: linear-gradient(135deg, var(--cream) 0%, var(--amber) 100%);
     -webkit-background-clip: text;
     background-clip: text;
@@ -270,3 +272,15 @@ html, body {
 /* Difficulty only between runs, score only during a run (same spot on screen) */
 body[data-state="playing"] #difficulty { display: none; }
 body:not([data-state="playing"]) #scoreboard { display: none; }
+
+/* ── OBSTACLE PORTRAIT ── */
+.hero-portrait {
+    width: 160px;
+    height: 160px;
+    margin-bottom: -8px;
+    /* soft fade at the waist instead of a hard cut */
+    -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent);
+    mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+
+.hero-portrait[hidden] { display: none; }
