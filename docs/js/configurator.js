@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+const CAR_FILES = {
+    'Cube':    'assets/cars/car_cube.glb',
+    'Cube015': 'assets/cars/car_cube015.glb',
+    'Cube029': 'assets/cars/car_cube029.glb',
+    'Cube034': 'assets/cars/car_cube034.glb',
+    'Cube053': 'assets/cars/car_cube053.glb',
+    'Cube055': 'assets/cars/car_cube055.glb',
+    'Cube070': 'assets/cars/car_cube070.glb',
+    'Cube072': 'assets/cars/car_cube072.glb',
+    'Cube074': 'assets/cars/car_cube074.glb',
+    'Cube082': 'assets/cars/car_cube082.glb',
+}
+
 const CAR_NODES = [
     'Cube',
     'Cube015',
@@ -132,7 +145,9 @@ function updateSelectedCard(index) {
 
 function selectCar(index) {
     currentIndex = index;
+    const name = CAR_NODES[index];
     localStorage.setItem('selectedCarIndex', index);
+    localStorage.setItem('selectedCarFile', CAR_FILES[name]);
     updateSelectedCard(index);
     updateDots(index);
 
@@ -140,7 +155,6 @@ function selectCar(index) {
         if (carRoots[name]) carRoots[name].visible = false;
     });
 
-    const name = CAR_NODES[index];
     if (carRoots[name]) {
         carRoots[name].visible = true;
         centerCameraOn(carRoots[name]);
@@ -149,6 +163,7 @@ function selectCar(index) {
 
 // Load GLB
 const loader = new GLTFLoader();
+const loadStartTime = Date.now();
 loader.load(
     'assets/low_poly_cars.glb',
     (gltf) => {
@@ -163,11 +178,29 @@ loader.load(
             }
         });
 
-        setTimeout(() => { 
-            const saved = localStorage.getItem('selectedCarIndex');
-            const startIndex = saved !== null ? parseInt(saved) : 0;
+        const saved = localStorage.getItem('selectedCarIndex');
+        const startIndex = saved !== null ? parseInt(saved) : 0;
+
+        // wait remaining time to hit 1 second minimum
+        const elapsed = Date.now() - loadStartTime;
+        const remaining = Math.max(0, 1000 - elapsed);
+
+        setTimeout(() => {
             selectCar(startIndex);
-        }, 10);
+
+            // fade out loading screen
+            const loading = document.getElementById('loading-screen');
+            if (loading) {
+                loading.classList.add('hidden');
+                setTimeout(() => loading.remove(), 500);
+            }
+        }, remaining);
+
+        // setTimeout(() => { 
+        //     const saved = localStorage.getItem('selectedCarIndex');
+        //     const startIndex = saved !== null ? parseInt(saved) : 0;
+        //     selectCar(startIndex);
+        // }, 10);
     },
     null,
     (error) => console.error('Error loading model:', error)

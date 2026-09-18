@@ -5,8 +5,16 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Car Configurator</title>
         <link rel="stylesheet" href="css/configurator.css" />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
     </head>
     <body>
+
+        <div id="loading-screen">
+            <div id="loading-content">
+                <div id="lottie-container"></div>
+                <p id="loading-text">Loading your garage...</p>
+            </div>
+        </div>
 
         <div id="car-selector-wrapper">
             <div id="car-selector">
@@ -16,6 +24,16 @@
                 <!-- dots injected by JS -->
             </div>
         </div>
+
+        <script>
+            lottie.loadAnimation({
+                container: document.getElementById('lottie-container'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: 'assets/loader.json'
+            });
+        </script>
 
         <script type="importmap">
             {
