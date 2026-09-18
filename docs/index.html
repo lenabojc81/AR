@@ -3,9 +3,97 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Birthday Car</title>
+        <title>Your Garage</title>
+        <link rel="stylesheet" href="css/index.css" />
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
     </head>
     <body>
-        <h1>Coming soon 🚗</h1>
+
+        <!-- HERO -->
+        <!-- <section id="hero">
+            <div id="hero-content">
+                <p class="eyebrow">Welcome to</p>
+                <h1>Your Garage</h1>
+                <p class="subtitle">Pick your dream car, make it yours, then
+                    watch it come to life in augmented reality.</p>
+                <a href="#choose" class="scroll-btn">
+                    <span>Get Started</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M8 3v10M3 9l5 5 5-5" stroke="currentColor"
+                            stroke-width="1.5" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                    </svg>
+                </a>
+            </div>
+            <div id="hero-bg"></div>
+        </section> -->
+
+        <!-- CHOOSE YOUR CAR -->
+        <section id="choose">
+            <div class="section-header">
+                <p class="eyebrow">Step 1</p>
+                <h2>Choose Your Car</h2>
+                <p class="section-sub">Browse the garage and pick the one that
+                    speaks to you.</p>
+            </div>
+
+            <div id="garage-widget">
+                <div id="loading-screen">
+                    <div id="loading-content">
+                        <div id="lottie-container"></div>
+                        <p id="loading-text">Loading your garage...</p>
+                    </div>
+                </div>
+                <div id="canvas-wrapper"></div>
+                <div id="car-selector-wrapper">
+                    <div id="car-selector"></div>
+                    <div id="scroll-dots"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- VIEW IN AR -->
+        <section id="ar-section">
+            <div class="section-header">
+                <p class="eyebrow">Step 2</p>
+                <h2>See It in Real Life</h2>
+                <p class="section-sub">Point your camera at the marker and watch
+                    your car appear in augmented reality.</p>
+            </div>
+            <button id="ar-btn" disabled>
+                <span class="ar-btn-icon">📷</span>
+                <span>View in AR</span>
+                <span class="ar-btn-badge">Coming Soon</span>
+            </button>
+            <p class="ar-hint">AR feature coming soon — print the marker and
+                scan it with your phone.</p>
+        </section>
+
+        <footer>
+            <p>Made with ❤️ as a birthday gift</p>
+        </footer>
+
+        <script>
+            lottie.loadAnimation({
+                container: document.getElementById('lottie-container'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: 'assets/loader.json'
+            });
+        </script>
+
+        <script type="importmap">
+            {
+                "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+                }
+            }
+        </script>
+
+        <script type="module" src="js/index.js"></script>
+
     </body>
 </html>
