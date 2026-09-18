@@ -25,7 +25,7 @@ const CAR_LENGTH = 2;                      // car is scaled to this length
 const CAR_EXTRA_ROTATION = Math.PI;              // set to Math.PI if the car drives backwards
 const START_SPEED = 20; 
 const ACCELERATION = 0.5;   // speed gained per second (20 -> 40 takes 40 s)
-const MAX_SPEED = 150;
+const MAX_SPEED = 500;
 const HIT_COOLDOWN = 1.5;   // seconds of protection after the first hit
 
 let hits = 0;
@@ -33,7 +33,18 @@ let invincibleUntil = 0;
 let gameOver = false;
 let lane = 0;   // -1 = left, 0 = center, 1 = right
 
+// Obstacles
+const OBSTACLE_SIZE = { w: 1.4, h: 1.2, d: 1.4 };
+const SPAWN_Z = -150;              // spawned beyond the fog, so they never pop in
+const DESPAWN_Z = 12;              // recycled once behind the camera
+const MIN_ROW_GAP = 28;            // road distance between obstacle rows at start speed
+const ROW_GAP_PER_SPEED = 0.25;    // rows spread out a bit as speed increases
+const TWO_LANE_CHANCE = 0.35;      // chance a row blocks 2 lanes instead of 1
+const HITBOX_FORGIVENESS = 0.8;
+
 let speed = START_SPEED;
+const BEST_KEY = 'laneDodgerBest';
+let distance = 0;
 
 const COLORS = {
     sky:    0x1a0f08,   // --bg-dark
@@ -206,10 +217,113 @@ for (let z = SCENERY_START; z > SCENERY_START - SCENERY_LENGTH; z -= POST_SPACIN
     }
 }
 
+// ---------- Obstacles ----------
+const obstacleGeometry = new THREE.BoxGeometry(OBSTACLE_SIZE.w, OBSTACLE_SIZE.h, OBSTACLE_SIZE.d);
+const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0xef4444, flatShading: true });
+
+const obstacles = [];      // boxes currently on the road
+const obstaclePool = [];   // hidden boxes waiting to be reused
+
+let distanceSinceRow = -60;      // negative = short grace period at the start
+let nextRowGap = MIN_ROW_GAP;
+
+function getObstacle() {
+    const box = obstaclePool.pop() || new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+    if (!box.parent) scene.add(box);
+    box.visible = true;
+    box.userData.hit = false;
+    return box;
+}
+
+function releaseObstacle(box) {
+    box.visible = false;
+    obstaclePool.push(box);
+}
+
+// A row blocks 1 or 2 random lanes, never all 3
+function spawnRow(z) {
+    const lanes = [-1, 0, 1];
+    for (let i = lanes.length - 1; i > 0; i--) {   // shuffle
+        const j = Math.floor(Math.random() * (i + 1));
+        [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+    }
+
+    const count = Math.random() < TWO_LANE_CHANCE ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+        const box = getObstacle();
+        box.position.set(lanes[i] * LANE_WIDTH, OBSTACLE_SIZE.h / 2, z);
+        obstacles.push(box);
+    }
+}
+
+function updateObstacles(move) {
+    // Move active boxes, recycle the ones that passed the camera
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const box = obstacles[i];
+        box.position.z += move;
+        if (box.position.z > DESPAWN_Z) {
+            releaseObstacle(box);
+            obstacles.splice(i, 1);
+        }
+    }
+
+    // Spawn a new row every `nextRowGap` units of road
+    distanceSinceRow += move;
+    if (distanceSinceRow >= nextRowGap) {
+        distanceSinceRow -= nextRowGap;
+        spawnRow(SPAWN_Z + distanceSinceRow);   // keeps spacing exact at any frame rate
+        nextRowGap = MIN_ROW_GAP
+            + (speed - START_SPEED) * ROW_GAP_PER_SPEED
+            + Math.random() * 10;
+    }
+}
+
+// Car and obstacles are compared as flat rectangles on the road
+// function checkCollisions() {
+//     const reachX = carHalfWidth * HITBOX_FORGIVENESS + OBSTACLE_SIZE.w / 2;
+//     const reachZ = carHalfLength * HITBOX_FORGIVENESS + OBSTACLE_SIZE.d / 2;
+
+//     for (const box of obstacles) {
+//         if (box.userData.hit) continue;   // each box can only hit once
+
+//         const overlapX = Math.abs(box.position.x - player.position.x) < reachX;
+//         const overlapZ = Math.abs(box.position.z - player.position.z) < reachZ;
+
+//         if (overlapX && overlapZ) {
+//             box.userData.hit = true;
+//             handleHit();
+//         }
+//     }
+// }
+function checkCollisions(move) {
+    const reachX = carHalfWidth * HITBOX_FORGIVENESS + OBSTACLE_SIZE.w / 2;
+    const reachZ = carHalfLength * HITBOX_FORGIVENESS + OBSTACLE_SIZE.d / 2;
+    const carZ = player.position.z;
+
+    for (const box of obstacles) {
+        if (box.userData.hit) continue;   // each box can only hit once
+
+        const nowZ = box.position.z;
+        const beforeZ = nowZ - move;
+
+        const overlapX = Math.abs(box.position.x - player.position.x) < reachX;
+        const overlapZ = nowZ > carZ - reachZ && beforeZ < carZ + reachZ;
+
+        if (overlapX && overlapZ) {
+            box.userData.hit = true;
+            handleHit();
+        }
+    }
+}
+
 // ---------- Player car ----------
 // `player` is what later steps will move between lanes.
 const player = new THREE.Group();
 scene.add(player);
+
+let carLoaded = false;
+let carHalfWidth = 0;
+const carHalfLength = CAR_LENGTH / 2;
 
 const loadingScreen = document.getElementById('loading-screen');
 const loadingText = document.getElementById('loading-text');
@@ -240,7 +354,10 @@ new GLTFLoader().load(
         // Scale to a fixed length so every car fits the lanes
         const pivot = new THREE.Group();
         pivot.add(model);
-        pivot.scale.setScalar(CAR_LENGTH / size.z);
+        const scale = CAR_LENGTH / size.z;
+        pivot.scale.setScalar(scale);
+        carHalfWidth = (size.x * scale) / 2;
+        carLoaded = true;
         player.add(pivot);
 
         console.log('Game car loaded:', CAR_NODES[carIndex]);
@@ -290,6 +407,50 @@ container.addEventListener('pointermove', (e) => {
 container.addEventListener('pointerup', () => (swipeStart = null));
 container.addEventListener('pointercancel', () => (swipeStart = null));
 
+// ---------- Score ----------
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+
+function loadBest() {
+    try {
+        return parseInt(localStorage.getItem(BEST_KEY), 10) || 0;
+    } catch {
+        return 0;
+    }
+}
+
+function formatMeters(m) {
+    return m.toLocaleString() + ' m';
+}
+
+let best = loadBest();
+let shownScore = -1;
+bestEl.textContent = 'Best ' + formatMeters(best);
+
+function updateScore() {
+    const score = Math.floor(distance);
+    if (score === shownScore) return;   // only touch the page when the number changes
+    shownScore = score;
+    scoreEl.textContent = formatMeters(score);
+
+    if (score > best && !bestEl.classList.contains('new-best')) {
+        bestEl.textContent = 'New best!';
+        bestEl.classList.add('new-best');
+    }
+}
+
+function saveBest() {
+    const score = Math.floor(distance);
+    if (score > best) {
+        best = score;
+        try {
+            localStorage.setItem(BEST_KEY, best);
+        } catch {
+            // storage blocked (private mode) - the game still works
+        }
+    }
+}
+
 // ---------- Loop ----------
 const clock = new THREE.Clock();
 
@@ -308,14 +469,15 @@ function handleHit() {
         // Second hit: game over
         gameOver = true;
         speed = 0;
+        saveBest();
         console.log('Game over');
     }
 }
 
-// TEMPORARY: press H to test until obstacles exist
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'h') handleHit();
-});
+// // TEMPORARY: press H to test until obstacles exist
+// window.addEventListener('keydown', (e) => {
+//     if (e.key === 'h') handleHit();
+// });
 
 renderer.setAnimationLoop(() => {
     // Time since last frame (capped so switching tabs doesn't cause a jump)
@@ -325,6 +487,8 @@ renderer.setAnimationLoop(() => {
         speed = Math.min(speed + ACCELERATION * dt, MAX_SPEED);
     }
     const move = speed * dt;
+    distance += move;
+    updateScore();
 
     // Lane dashes: slide toward the camera, snap back every dash spacing.
     // Because all dashes look the same, the snap is invisible.
@@ -337,6 +501,10 @@ renderer.setAnimationLoop(() => {
             item.userData.place(item, item.position.z - SCENERY_LENGTH);
         }
     }
+
+    // Obstacles
+    updateObstacles(move);
+    if (carLoaded && !gameOver) checkCollisions(move);
 
     // Engine vibration (stops when the game is over)
     if (!gameOver) {
