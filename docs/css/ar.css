@@ -78,6 +78,7 @@ body {
 }
 #onboarding img {
     width: min(60vw, 260px);
+    opacity: 0.7;
     border-radius: 8px;
     animation: pulse 1.6s ease-in-out infinite;
 }
