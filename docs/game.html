@@ -9,7 +9,7 @@
         <script
             src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
     </head>
-    <body>
+    <body data-state="ready">
 
         <div id="game"></div>
 
@@ -21,6 +21,33 @@
         <div id="scoreboard">
             <div id="score">0 m</div>
             <div id="best">Best 0 m</div>
+        </div>
+
+        <div id="difficulty" role="radiogroup" aria-label="Difficulty">
+            <button data-level="easy" role="radio">Easy</button>
+            <button data-level="normal" role="radio">Normal</button>
+            <button data-level="hard" role="radio">Hard</button>
+        </div>
+
+        <div id="start-screen" class="overlay">
+            <div class="overlay-content">
+                <h1>Lane Dodger</h1>
+                <p class="hint">Swipe left or right to change lanes.<br>
+                    On a keyboard, use the arrow keys.<br>
+                    The first hit slows you down. The second ends the run.</p>
+                <p id="start-best"></p>
+                <button id="start-btn" class="primary-btn">Tap to start</button>
+            </div>
+        </div>
+
+        <div id="gameover-screen" class="overlay" hidden>
+            <div class="overlay-content">
+                <h2>Game over</h2>
+                <p id="final-score">0 m</p>
+                <p id="final-best">Best 0 m</p>
+                <button id="restart-btn" class="primary-btn">Play again</button>
+                <a href="index.html" class="secondary-btn">Back to garage</a>
+            </div>
         </div>
 
         <div id="loading-screen">

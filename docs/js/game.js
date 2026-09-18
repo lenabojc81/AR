@@ -23,27 +23,51 @@ const ROAD_WIDTH = LANE_WIDTH * 3 + 1;     // 3 lanes + shoulders
 const ROAD_LENGTH = 300;                   // road runs from z=+20 to z=-280
 const CAR_LENGTH = 2;                      // car is scaled to this length
 const CAR_EXTRA_ROTATION = Math.PI;              // set to Math.PI if the car drives backwards
-const START_SPEED = 20; 
-const ACCELERATION = 0.5;   // speed gained per second (20 -> 40 takes 40 s)
+let START_SPEED = 20; 
+let ACCELERATION = 0.5;   // speed gained per second (20 -> 40 takes 40 s)
 const MAX_SPEED = 500;
 const HIT_COOLDOWN = 1.5;   // seconds of protection after the first hit
 
 let hits = 0;
 let invincibleUntil = 0;
 let gameOver = false;
+let started = false;
 let lane = 0;   // -1 = left, 0 = center, 1 = right
 
 // Obstacles
 const OBSTACLE_SIZE = { w: 1.4, h: 1.2, d: 1.4 };
 const SPAWN_Z = -150;              // spawned beyond the fog, so they never pop in
 const DESPAWN_Z = 12;              // recycled once behind the camera
-const MIN_ROW_GAP = 28;            // road distance between obstacle rows at start speed
+let MIN_ROW_GAP = 28;            // road distance between obstacle rows at start speed
 const ROW_GAP_PER_SPEED = 0.25;    // rows spread out a bit as speed increases
-const TWO_LANE_CHANCE = 0.35;      // chance a row blocks 2 lanes instead of 1
-const HITBOX_FORGIVENESS = 0.8;
+let TWO_LANE_CHANCE = 0.35;      // chance a row blocks 2 lanes instead of 1
+let HITBOX_FORGIVENESS = 0.8;
 
 let speed = START_SPEED;
-const BEST_KEY = 'laneDodgerBest';
+const DIFFICULTIES = {
+    easy:   { startSpeed: 20, acceleration: 0.5, minRowGap: 28, twoLaneChance: 0.35, hitbox: 0.8  },
+    normal: { startSpeed: 26, acceleration: 0.8, minRowGap: 24, twoLaneChance: 0.45, hitbox: 0.85 },
+    hard:   { startSpeed: 32, acceleration: 1.2, minRowGap: 20, twoLaneChance: 0.55, hitbox: 0.95 },
+};
+
+const DIFFICULTY_KEY = 'laneDodgerDifficulty';
+
+function loadDifficulty() {
+    try {
+        const saved = localStorage.getItem(DIFFICULTY_KEY);
+        return saved in DIFFICULTIES ? saved : 'easy';
+    } catch {
+        return 'easy';
+    }
+}
+
+let difficulty = loadDifficulty();
+
+// Each difficulty has its own high score. Easy keeps the old key,
+// so the existing best score isn't lost.
+function bestKey() {
+    return difficulty === 'easy' ? 'laneDodgerBest' : 'laneDodgerBest_' + difficulty;
+}
 let distance = 0;
 
 const COLORS = {
@@ -372,7 +396,7 @@ new GLTFLoader().load(
 
 // ---------- Controls ----------
 function changeLane(direction) {
-    if (gameOver) return;
+    if (!started || gameOver) return;
     lane = THREE.MathUtils.clamp(lane + direction, -1, 1);
 }
 
@@ -413,7 +437,7 @@ const bestEl = document.getElementById('best');
 
 function loadBest() {
     try {
-        return parseInt(localStorage.getItem(BEST_KEY), 10) || 0;
+        return parseInt(localStorage.getItem(bestKey()), 10) || 0;
     } catch {
         return 0;
     }
@@ -444,12 +468,136 @@ function saveBest() {
     if (score > best) {
         best = score;
         try {
-            localStorage.setItem(BEST_KEY, best);
+            localStorage.setItem(bestKey(), best);
         } catch {
             // storage blocked (private mode) - the game still works
         }
     }
 }
+
+// ---------- Screens ----------
+const startScreen = document.getElementById('start-screen');
+const gameOverScreen = document.getElementById('gameover-screen');
+const restartBtn = document.getElementById('restart-btn');
+const finalScoreEl = document.getElementById('final-score');
+const finalBestEl = document.getElementById('final-best');
+
+function setState(state) {
+    document.body.dataset.state = state;    // "ready", "playing", or "over"
+}
+
+function startGame() {
+    if (!carLoaded || started) return;
+    startScreen.hidden = true;
+    started = true;
+    setState('playing');
+}
+
+function endGame() {
+    gameOver = true;
+    speed = 0;
+
+    const score = Math.floor(distance);
+    const isNewBest = score > best;   // check before saveBest() updates `best`
+    saveBest();
+
+    // Short pause so the player sees the crash before the screen appears
+    setTimeout(() => {
+        finalScoreEl.textContent = formatMeters(score);
+        finalBestEl.textContent = isNewBest ? 'New best!' : 'Best ' + formatMeters(best);
+        finalBestEl.classList.toggle('new-best', isNewBest);
+        gameOverScreen.hidden = false;
+        setState('over');
+        restartBtn.focus();
+    }, 700);
+}
+
+// Put everything back to the starting state without reloading the page
+function resetGame() {
+    for (const box of obstacles) releaseObstacle(box);
+    obstacles.length = 0;
+    distanceSinceRow = -60;
+    nextRowGap = MIN_ROW_GAP;
+
+    hits = 0;
+    invincibleUntil = 0;
+    gameOver = false;
+    speed = START_SPEED;
+    distance = 0;
+
+    lane = 0;
+    player.position.x = 0;
+    player.rotation.set(0, 0, 0);
+    player.visible = true;
+
+    shownScore = -1;
+    bestEl.textContent = 'Best ' + formatMeters(best);
+    bestEl.classList.remove('new-best');
+
+    gameOverScreen.hidden = true;
+    started = true;
+    setState('playing');
+}
+
+startScreen.addEventListener('click', startGame);
+restartBtn.addEventListener('click', resetGame);
+
+// Space / Enter also start and restart
+window.addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('#difficulty')) return;
+    if (e.key !== ' ' && e.key !== 'Enter') return;
+    if (!started) {
+        e.preventDefault();
+        startGame();
+    } else if (gameOver && !gameOverScreen.hidden) {
+        e.preventDefault();
+        resetGame();
+    }
+});
+
+// ---------- Difficulty ----------
+const difficultyEl = document.getElementById('difficulty');
+const startBestEl = document.getElementById('start-best');
+
+function applyDifficulty(level) {
+    difficulty = level;
+    const d = DIFFICULTIES[level];
+
+    START_SPEED = d.startSpeed;
+    ACCELERATION = d.acceleration;
+    MIN_ROW_GAP = d.minRowGap;
+    TWO_LANE_CHANCE = d.twoLaneChance;
+    HITBOX_FORGIVENESS = d.hitbox;
+
+    // Before the first run, apply right away (resetGame handles later runs)
+    if (!started) {
+        speed = START_SPEED;
+        nextRowGap = MIN_ROW_GAP;
+    }
+
+    // Show this difficulty's best score
+    best = loadBest();
+    bestEl.textContent = 'Best ' + formatMeters(best);
+    bestEl.classList.remove('new-best');
+    startBestEl.textContent = best > 0 ? 'Your best: ' + formatMeters(best) : '';
+
+    for (const btn of difficultyEl.querySelectorAll('button')) {
+        btn.setAttribute('aria-checked', btn.dataset.level === level);
+    }
+
+    try {
+        localStorage.setItem(DIFFICULTY_KEY, level);
+    } catch {
+        // storage blocked - still works for this session
+    }
+}
+
+difficultyEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (btn) applyDifficulty(btn.dataset.level);
+});
+
+applyDifficulty(difficulty);
 
 // ---------- Loop ----------
 const clock = new THREE.Clock();
@@ -466,11 +614,7 @@ function handleHit() {
         invincibleUntil = clock.elapsedTime + HIT_COOLDOWN;
         console.log('Hit! Speed now', speed.toFixed(1));
     } else {
-        // Second hit: game over
-        gameOver = true;
-        speed = 0;
-        saveBest();
-        console.log('Game over');
+        endGame();
     }
 }
 
@@ -482,6 +626,10 @@ function handleHit() {
 renderer.setAnimationLoop(() => {
     // Time since last frame (capped so switching tabs doesn't cause a jump)
     const dt = Math.min(clock.getDelta(), 0.05);
+    if (!started) {
+        renderer.render(scene, camera);
+        return;
+    }
     // Slowly speed up
     if (!gameOver) {
         speed = Math.min(speed + ACCELERATION * dt, MAX_SPEED);
