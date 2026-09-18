@@ -426,11 +426,17 @@ section {
     padding: 18px 40px;
     background: var(--red);
     color: white;
-    font-size: 18px;
-    font-weight: 700;
+    font: 700 18px system-ui, -apple-system, sans-serif;   /* buttons don't inherit the page font */
     border: none;
     border-radius: 100px;
-    margin-bottom: 16px;
+    cursor: pointer;
+    box-shadow: 0 0 32px rgba(239, 68, 68, 0.3);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#ar-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 48px rgba(239, 68, 68, 0.5);
 }
 
 .ar-btn-icon { font-size: 22px; }
@@ -480,5 +486,14 @@ footer {
 }
 
 #game-section .scroll-btn {
-    position: relative; /* keeps it above the glow */
+    position: relative;   /* keeps it above the glow */
+    gap: 12px;
+    padding: 18px 40px;
+    font-size: 18px;
+}
+
+#ar-btn:focus-visible,
+#game-section .scroll-btn:focus-visible {
+    outline: 2px solid var(--cream);
+    outline-offset: 3px;
 }

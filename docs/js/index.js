@@ -31,7 +31,7 @@ let carRoots = {};
 
 // Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf3e5ab);
+scene.background = new THREE.Color(0x5c4331);
 
 // Renderer — attached to #canvas-wrapper
 const canvasWrapper = document.getElementById('canvas-wrapper');
@@ -58,10 +58,13 @@ controls.maxDistance = 20;
 controls.maxPolarAngle = Math.PI / 2;
 
 // Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x4a3526, 1.4));   // warm sky, brown bounce from below
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(10, 20, 10);
 scene.add(sun);
+const rim = new THREE.DirectionalLight(0xf59e0b, 0.8);            // amber backlight
+rim.position.set(-8, 6, -12);
+scene.add(rim);
 
 function centerCameraOn(object) {
     const box = new THREE.Box3().setFromObject(object);
