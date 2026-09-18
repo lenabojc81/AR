@@ -37,8 +37,15 @@ let lane = 0;   // -1 = left, 0 = center, 1 = right
 // Obstacles
 const OBSTACLE_SIZE = { w: 1.4, h: 1.2, d: 1.4 };
 const OBSTACLE_TYPES = [
-    { model: 'assets/obstacles/obstacle_1.glb', sound: 'assets/obstacles/obstacle_1.mp3', }
+    { 
+        model: 'assets/obstacles/obstacle_1.glb', 
+        sound: 'assets/obstacles/obstacle_1.mp3', 
+        crashSound: 'assets/obstacles/obstacle_2.mp3',
+    },
 ];
+const MUSIC = 'assets/sounds/soundtrack.mp3';
+const MUSIC_VOLUME = 0.5;    // 0 to 1
+const DUCK_VOLUME = 0.15;    // music volume while a hit sound plays (0 = silent)
 const SPAWN_Z = -150;              // spawned beyond the fog, so they never pop in
 const DESPAWN_Z = 12;              // recycled once behind the camera
 let MIN_ROW_GAP = 28;            // road distance between obstacle rows at start speed
@@ -263,17 +270,84 @@ function loadSound(url) {
 }
 
 function playSound(buffer) {
-    if (!audioCtx || !buffer) return;
+    if (!audioCtx || !buffer) return 0;
     const source = audioCtx.createBufferSource();
     source.buffer = buffer;
     source.connect(audioCtx.destination);
     source.start();
+    return buffer.duration;
 }
 
 // Browsers only allow sound after the player taps or presses a key
 function unlockAudio() {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
+
+// ---------- Soundtrack ----------
+// All music goes through one volume control (gain), so it can fade and duck
+const musicGain = audioCtx ? audioCtx.createGain() : null;
+if (musicGain) {
+    musicGain.gain.value = MUSIC_VOLUME;
+    musicGain.connect(audioCtx.destination);
+}
+
+let musicBuffer = null;
+let musicSource = null;
+let fadingSource = null;
+
+loadSound(MUSIC).then((buffer) => {
+    musicBuffer = buffer;
+    if (started && !gameOver) startMusic();   // loaded after the game already started
+});
+
+function startMusic() {
+    if (!audioCtx || !musicBuffer || musicSource) return;
+    if (fadingSource) {
+        fadingSource.stop();
+        fadingSource = null;
+    }
+
+    const now = audioCtx.currentTime;
+    musicGain.gain.cancelScheduledValues(now);
+    musicGain.gain.setValueAtTime(MUSIC_VOLUME, now);
+
+    musicSource = audioCtx.createBufferSource();
+    musicSource.buffer = musicBuffer;
+    musicSource.loop = true;
+    musicSource.connect(musicGain);
+    musicSource.start();
+}
+
+function stopMusic(fadeSeconds = 1) {
+    if (!musicSource) return;
+    const now = audioCtx.currentTime;
+    const g = musicGain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0, now + fadeSeconds);
+    musicSource.stop(now + fadeSeconds);
+    fadingSource = musicSource;
+    musicSource = null;
+}
+
+// Lower the music while a sound plays, then fade it back up
+function duckMusic(seconds) {
+    if (!musicSource) return;
+    const now = audioCtx.currentTime;
+    const g = musicGain.gain;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(DUCK_VOLUME, now + 0.08);          // quick dip
+    g.setValueAtTime(DUCK_VOLUME, now + seconds);                // hold during the sound
+    g.linearRampToValueAtTime(MUSIC_VOLUME, now + seconds + 0.6); // smooth return
+}
+
+// Silence everything when the player switches tabs or locks the phone
+document.addEventListener('visibilitychange', () => {
+    if (!audioCtx) return;
+    if (document.hidden) audioCtx.suspend();
+    else if (started) audioCtx.resume();
+});
 
 // ---------- Obstacles ----------
 const obstacles = [];      // boxes currently on the road
@@ -295,6 +369,7 @@ const fallbackMaterial = new THREE.MeshLambertMaterial({ color: 0xef4444, flatSh
 let obstacleTemplates = [new THREE.Mesh(fallbackGeometry, fallbackMaterial)];
 
 const obstacleSounds = new Map();   // template -> its hit sound
+const obstacleCrashSounds = new Map();
 
 // Center a model, stand it on the road and scale it to fit a lane
 function normalizeObstacle(model) {
@@ -357,9 +432,11 @@ Promise.all(
         Promise.all([
             gltfLoader.loadAsync(type.model).then((gltf) => normalizeObstacle(gltf.scene)),
             loadSound(type.sound),
+            type.crashSound ? loadSound(type.crashSound) : Promise.resolve(null),
         ])
-            .then(([template, sound]) => {
+            .then(([template, sound, crashSound]) => {
                 obstacleSounds.set(template, sound);
+                obstacleCrashSounds.set(template, crashSound);
                 return template;
             })
             .catch((err) => {
@@ -629,10 +706,12 @@ function startGame() {
     startScreen.hidden = true;
     started = true;
     unlockAudio();
+    startMusic();
     setState('playing');
 }
 
 function endGame() {
+    stopMusic(1.5);
     gameOver = true;
     speed = 0;
 
@@ -676,6 +755,7 @@ function resetGame() {
     gameOverScreen.hidden = true;
     started = true;
     unlockAudio();
+    startMusic();
     setState('playing');
 }
 
@@ -747,9 +827,15 @@ function handleHit(obstacle) {
     if (gameOver || clock.elapsedTime < invincibleUntil) return;
 
     hits++;
-    playSound(obstacleSounds.get(obstacle.userData.template));
-
+    // First hit: normal sound. Second hit: crash sound (or the normal one if there isn't one)
+    const t = obstacle.userData.template;
+    const sound = hits === 1
+        ? obstacleSounds.get(t)
+        : obstacleCrashSounds.get(t) || obstacleSounds.get(t);
+    const hitLength = playSound(sound);
+    
     if (hits === 1) {
+        duckMusic(hitLength);
         // First hit: half speed, but never below the starting speed
         speed = Math.max(speed / 2, START_SPEED);
         invincibleUntil = clock.elapsedTime + HIT_COOLDOWN;
