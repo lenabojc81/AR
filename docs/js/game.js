@@ -23,6 +23,17 @@ const ROAD_WIDTH = LANE_WIDTH * 3 + 1;     // 3 lanes + shoulders
 const ROAD_LENGTH = 300;                   // road runs from z=+20 to z=-280
 const CAR_LENGTH = 2;                      // car is scaled to this length
 const CAR_EXTRA_ROTATION = Math.PI;              // set to Math.PI if the car drives backwards
+const START_SPEED = 20; 
+const ACCELERATION = 0.5;   // speed gained per second (20 -> 40 takes 40 s)
+const MAX_SPEED = 150;
+const HIT_COOLDOWN = 1.5;   // seconds of protection after the first hit
+
+let hits = 0;
+let invincibleUntil = 0;
+let gameOver = false;
+let lane = 0;   // -1 = left, 0 = center, 1 = right
+
+let speed = START_SPEED;
 
 const COLORS = {
     sky:    0x1a0f08,   // --bg-dark
@@ -128,6 +139,73 @@ for (const x of [-LANE_WIDTH / 2, LANE_WIDTH / 2]) {
 }
 scene.add(laneMarks);
 
+// ---------- Scenery (trees and posts beside the road) ----------
+const SCENERY_START = 20;       // items behind this z get recycled
+const SCENERY_LENGTH = 180;     // how far ahead items are spread
+const scenery = [];
+
+const treeTopGeometry = new THREE.ConeGeometry(1, 2.6, 6);
+const trunkGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.8, 5);
+const treeTopMaterial = new THREE.MeshLambertMaterial({ color: 0x4a5d23, flatShading: true });
+const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x5a3a22, flatShading: true });
+
+const postGeometry = new THREE.BoxGeometry(0.12, 0.9, 0.12);
+const reflectorGeometry = new THREE.BoxGeometry(0.14, 0.15, 0.14);
+const postMaterial = new THREE.MeshLambertMaterial({ color: COLORS.dash });
+const reflectorMaterial = new THREE.MeshBasicMaterial({ color: COLORS.edge });
+
+function makeTree() {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.position.y = 0.4;
+    const top = new THREE.Mesh(treeTopGeometry, treeTopMaterial);
+    top.position.y = 2.1;
+    tree.add(trunk, top);
+    return tree;
+}
+
+function makePost() {
+    const post = new THREE.Group();
+    const pole = new THREE.Mesh(postGeometry, postMaterial);
+    pole.position.y = 0.45;
+    const reflector = new THREE.Mesh(reflectorGeometry, reflectorMaterial);
+    reflector.position.y = 0.8;
+    post.add(pole, reflector);
+    return post;
+}
+
+// Trees: random side, distance from road, size and rotation
+function placeTree(tree, z) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    tree.position.set(side * (ROAD_WIDTH / 2 + 2 + Math.random() * 12), 0, z);
+    tree.scale.setScalar(0.7 + Math.random() * 0.8);
+    tree.rotation.y = Math.random() * Math.PI;
+}
+
+// Posts: fixed spacing on both road edges
+function placePost(post, z) {
+    post.position.z = z;
+}
+
+for (let i = 0; i < 40; i++) {
+    const tree = makeTree();
+    placeTree(tree, SCENERY_START - Math.random() * SCENERY_LENGTH);
+    tree.userData.place = placeTree;
+    scene.add(tree);
+    scenery.push(tree);
+}
+
+const POST_SPACING = 10;   // SCENERY_LENGTH must divide evenly by this
+for (let z = SCENERY_START; z > SCENERY_START - SCENERY_LENGTH; z -= POST_SPACING) {
+    for (const side of [-1, 1]) {
+        const post = makePost();
+        post.position.set(side * (ROAD_WIDTH / 2 + 0.4), 0, z);
+        post.userData.place = placePost;
+        scene.add(post);
+        scenery.push(post);
+    }
+}
+
 // ---------- Player car ----------
 // `player` is what later steps will move between lanes.
 const player = new THREE.Group();
@@ -175,7 +253,109 @@ new GLTFLoader().load(
     }
 );
 
+// ---------- Controls ----------
+function changeLane(direction) {
+    if (gameOver) return;
+    lane = THREE.MathUtils.clamp(lane + direction, -1, 1);
+}
+
+// Keyboard: arrows or A / D
+window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;   // holding a key moves only one lane
+    const key = e.key.toLowerCase();
+    if (key === 'arrowleft' || key === 'a') changeLane(-1);
+    if (key === 'arrowright' || key === 'd') changeLane(1);
+});
+
+// Swipe (also works with mouse drag)
+const SWIPE_MIN = 30;   // pixels before it counts as a swipe
+let swipeStart = null;
+
+container.addEventListener('pointerdown', (e) => {
+    swipeStart = { x: e.clientX, y: e.clientY };
+});
+
+container.addEventListener('pointermove', (e) => {
+    if (!swipeStart) return;
+    const dx = e.clientX - swipeStart.x;
+    const dy = e.clientY - swipeStart.y;
+
+    // Trigger as soon as the finger has moved far enough sideways
+    if (Math.abs(dx) > SWIPE_MIN && Math.abs(dx) > Math.abs(dy)) {
+        changeLane(dx > 0 ? 1 : -1);
+        swipeStart = null;   // one lane per swipe
+    }
+});
+
+container.addEventListener('pointerup', () => (swipeStart = null));
+container.addEventListener('pointercancel', () => (swipeStart = null));
+
 // ---------- Loop ----------
+const clock = new THREE.Clock();
+
+function handleHit() {
+    // Ignore hits during the cooldown, so one obstacle can't count twice
+    if (gameOver || clock.elapsedTime < invincibleUntil) return;
+
+    hits++;
+
+    if (hits === 1) {
+        // First hit: half speed, but never below the starting speed
+        speed = Math.max(speed / 2, START_SPEED);
+        invincibleUntil = clock.elapsedTime + HIT_COOLDOWN;
+        console.log('Hit! Speed now', speed.toFixed(1));
+    } else {
+        // Second hit: game over
+        gameOver = true;
+        speed = 0;
+        console.log('Game over');
+    }
+}
+
+// TEMPORARY: press H to test until obstacles exist
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'h') handleHit();
+});
+
 renderer.setAnimationLoop(() => {
+    // Time since last frame (capped so switching tabs doesn't cause a jump)
+    const dt = Math.min(clock.getDelta(), 0.05);
+    // Slowly speed up
+    if (!gameOver) {
+        speed = Math.min(speed + ACCELERATION * dt, MAX_SPEED);
+    }
+    const move = speed * dt;
+
+    // Lane dashes: slide toward the camera, snap back every dash spacing.
+    // Because all dashes look the same, the snap is invisible.
+    laneMarks.position.z = (laneMarks.position.z + move) % DASH_SPACING;
+
+    // Scenery: move toward the camera, send to the far end once passed
+    for (const item of scenery) {
+        item.position.z += move;
+        if (item.position.z > SCENERY_START) {
+            item.userData.place(item, item.position.z - SCENERY_LENGTH);
+        }
+    }
+
+    // Engine vibration (stops when the game is over)
+    if (!gameOver) {
+        player.position.y = Math.sin(clock.elapsedTime * 40) * 0.015;
+    }
+
+    // Blink the car while protected after a hit
+    const protectedNow = clock.elapsedTime < invincibleUntil;
+    player.visible = !protectedNow || Math.floor(clock.elapsedTime * 10) % 2 === 0;
+
+    // Slide toward the target lane (quicker at higher speeds)
+    const targetX = lane * LANE_WIDTH;
+    const sharpness = 10 + speed * 0.1;
+    player.position.x += (targetX - player.position.x) * (1 - Math.exp(-sharpness * dt));
+
+    // Lean into the lane change: turn toward it and roll slightly outward
+    const offset = targetX - player.position.x;
+    player.rotation.y = -offset * 0.12;
+    player.rotation.z = offset * 0.04;
+
     renderer.render(scene, camera);
 });

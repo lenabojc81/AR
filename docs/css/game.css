@@ -94,8 +94,8 @@ html, body {
     height: 200px;
 }
 
-#lottie-container svg [fill]:not([fill="none"])     { fill: var(--amber); }
-#lottie-container svg [stroke]:not([stroke="none"]) { stroke: var(--amber); }
+#lottie-container svg [fill]:not([fill="none"])     { fill: var(--cream); }
+#lottie-container svg [stroke]:not([stroke="none"]) { stroke: var(--cream); }
 
 #loading-text {
     color: var(--amber);
