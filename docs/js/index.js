@@ -31,7 +31,7 @@ let carRoots = {};
 
 // Scene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a0f08);
+scene.background = new THREE.Color(0xf3e5ab);
 
 // Renderer — attached to #canvas-wrapper
 const canvasWrapper = document.getElementById('canvas-wrapper');
