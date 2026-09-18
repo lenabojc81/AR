@@ -174,12 +174,21 @@ section {
 #lottie-container {
     width: 200px;
     height: 200px;
+    /* filter: brightness(0) invert(1); */
 }
 
 #loading-text {
     color: var(--amber);
     font-size: 15px;
     letter-spacing: 0.05em;
+}
+
+#lottie-container svg [fill]:not([fill="none"]) {
+    fill: var(--cream);
+}
+
+#lottie-container svg [stroke]:not([stroke="none"]) {
+    stroke: var(--cream);
 }
 
 #canvas-wrapper {
