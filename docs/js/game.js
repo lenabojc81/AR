@@ -36,6 +36,9 @@ let lane = 0;   // -1 = left, 0 = center, 1 = right
 
 // Obstacles
 const OBSTACLE_SIZE = { w: 1.4, h: 1.2, d: 1.4 };
+const OBSTACLE_TYPES = [
+    { model: 'assets/obstacles/obstacle_1.glb', sound: 'assets/obstacles/obstacle_1.mp3', }
+];
 const SPAWN_Z = -150;              // spawned beyond the fog, so they never pop in
 const DESPAWN_Z = 12;              // recycled once behind the camera
 let MIN_ROW_GAP = 28;            // road distance between obstacle rows at start speed
@@ -241,27 +244,115 @@ for (let z = SCENERY_START; z > SCENERY_START - SCENERY_LENGTH; z -= POST_SPACIN
     }
 }
 
-// ---------- Obstacles ----------
-const obstacleGeometry = new THREE.BoxGeometry(OBSTACLE_SIZE.w, OBSTACLE_SIZE.h, OBSTACLE_SIZE.d);
-const obstacleMaterial = new THREE.MeshLambertMaterial({ color: 0xef4444, flatShading: true });
+// ---------- Sound ----------
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+const audioCtx = AudioCtx ? new AudioCtx() : null;
 
+function loadSound(url) {
+    if (!audioCtx) return Promise.resolve(null);
+    return fetch(url)
+        .then((res) => {
+            if (!res.ok) throw new Error(res.status);
+            return res.arrayBuffer();
+        })
+        .then((data) => audioCtx.decodeAudioData(data))
+        .catch((err) => {
+            console.warn('Sound not loaded:', url, err);
+            return null;
+        });
+}
+
+function playSound(buffer) {
+    if (!audioCtx || !buffer) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start();
+}
+
+// Browsers only allow sound after the player taps or presses a key
+function unlockAudio() {
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// ---------- Obstacles ----------
 const obstacles = [];      // boxes currently on the road
-const obstaclePool = [];   // hidden boxes waiting to be reused
 
 let distanceSinceRow = -60;      // negative = short grace period at the start
 let nextRowGap = MIN_ROW_GAP;
 
-function getObstacle() {
-    const box = obstaclePool.pop() || new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-    if (!box.parent) scene.add(box);
-    box.visible = true;
-    box.userData.hit = false;
-    return box;
+// Loading manager: hides the loading screen once the car AND obstacles are loaded
+const loadingManager = new THREE.LoadingManager();
+loadingManager.onLoad = () => {
+    if (carLoaded) hideLoading();   // keep the error message if the car failed
+};
+const gltfLoader = new GLTFLoader(loadingManager);
+
+// Fallback box, used if the custom models are missing
+const fallbackGeometry = new THREE.BoxGeometry(OBSTACLE_SIZE.w, OBSTACLE_SIZE.h, OBSTACLE_SIZE.d);
+fallbackGeometry.translate(0, OBSTACLE_SIZE.h / 2, 0);   // bottom at y = 0, like the models
+const fallbackMaterial = new THREE.MeshLambertMaterial({ color: 0xef4444, flatShading: true });
+let obstacleTemplates = [new THREE.Mesh(fallbackGeometry, fallbackMaterial)];
+
+const obstacleSounds = new Map();   // template -> its hit sound
+
+// Center a model, stand it on the road and scale it to fit a lane
+function normalizeObstacle(model) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.set(-center.x, -box.min.y, -center.z);
+
+    const holder = new THREE.Group();
+    holder.add(model);
+    holder.scale.setScalar(Math.min(
+        OBSTACLE_SIZE.w / size.x,
+        OBSTACLE_SIZE.d / size.z,
+        (OBSTACLE_SIZE.h * 1.8) / size.y   // stop tall models from towering
+    ));
+    return holder;
 }
 
-function releaseObstacle(box) {
-    box.visible = false;
-    obstaclePool.push(box);
+// Load every model + its sound
+Promise.all(
+    OBSTACLE_TYPES.map((type) =>
+        Promise.all([
+            gltfLoader.loadAsync(type.model).then((gltf) => normalizeObstacle(gltf.scene)),
+            loadSound(type.sound),
+        ])
+            .then(([template, sound]) => {
+                obstacleSounds.set(template, sound);
+                return template;
+            })
+            .catch((err) => {
+                console.warn('Could not load obstacle:', type.model, err);
+                return null;
+            })
+    )
+).then((templates) => {
+    const loaded = templates.filter(Boolean);
+    if (loaded.length) obstacleTemplates = loaded;
+    console.log('Obstacle types loaded:', loaded.length);
+});
+
+// One pool of hidden, reusable copies per obstacle type
+const obstaclePools = new Map();
+
+function getObstacle() {
+    const template = obstacleTemplates[Math.floor(Math.random() * obstacleTemplates.length)];
+    if (!obstaclePools.has(template)) obstaclePools.set(template, []);
+
+    const obj = obstaclePools.get(template).pop() || template.clone();   // clones share geometry
+    obj.userData.template = template;
+    if (!obj.parent) scene.add(obj);
+    obj.visible = true;
+    obj.userData.hit = false;
+    return obj;
+}
+
+function releaseObstacle(obj) {
+    obj.visible = false;
+    obstaclePools.get(obj.userData.template).push(obj);
 }
 
 // A row blocks 1 or 2 random lanes, never all 3
@@ -275,7 +366,7 @@ function spawnRow(z) {
     const count = Math.random() < TWO_LANE_CHANCE ? 2 : 1;
     for (let i = 0; i < count; i++) {
         const box = getObstacle();
-        box.position.set(lanes[i] * LANE_WIDTH, OBSTACLE_SIZE.h / 2, z);
+        box.position.set(lanes[i] * LANE_WIDTH, 0, z);
         obstacles.push(box);
     }
 }
@@ -335,7 +426,7 @@ function checkCollisions(move) {
 
         if (overlapX && overlapZ) {
             box.userData.hit = true;
-            handleHit();
+            handleHit(box);
         }
     }
 }
@@ -357,7 +448,7 @@ function hideLoading() {
     setTimeout(() => loadingScreen.remove(), 500);
 }
 
-new GLTFLoader().load(
+gltfLoader.load(
     carPath(CAR_NODES[carIndex]),
     (gltf) => {
         const model = gltf.scene;
@@ -385,7 +476,7 @@ new GLTFLoader().load(
         player.add(pivot);
 
         console.log('Game car loaded:', CAR_NODES[carIndex]);
-        hideLoading();
+        // hideLoading();
     },
     undefined,
     (error) => {
@@ -490,6 +581,7 @@ function startGame() {
     if (!carLoaded || started) return;
     startScreen.hidden = true;
     started = true;
+    unlockAudio();
     setState('playing');
 }
 
@@ -536,6 +628,7 @@ function resetGame() {
 
     gameOverScreen.hidden = true;
     started = true;
+    unlockAudio();
     setState('playing');
 }
 
@@ -602,11 +695,12 @@ applyDifficulty(difficulty);
 // ---------- Loop ----------
 const clock = new THREE.Clock();
 
-function handleHit() {
+function handleHit(obstacle) {
     // Ignore hits during the cooldown, so one obstacle can't count twice
     if (gameOver || clock.elapsedTime < invincibleUntil) return;
 
     hits++;
+    playSound(obstacleSounds.get(obstacle.userData.template));
 
     if (hits === 1) {
         // First hit: half speed, but never below the starting speed
