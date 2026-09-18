@@ -108,6 +108,11 @@ function buildDots() {
     });
 }
 
+document.getElementById('ar-btn').addEventListener('click', () => {
+    const carName = CAR_NODES[currentIndex];
+    window.location.href = `ar.html?car=${carName}`;
+});
+
 function updateDots(index) {
     document.querySelectorAll('.scroll-dot').forEach((dot, i) => {
         dot.classList.toggle('active', i === index);

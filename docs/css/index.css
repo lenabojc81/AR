@@ -421,8 +421,6 @@ section {
     font-weight: 700;
     border: none;
     border-radius: 100px;
-    cursor: not-allowed;
-    opacity: 0.6;
     margin-bottom: 16px;
 }
 

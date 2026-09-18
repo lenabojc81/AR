@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>AR View</title>
+        <link rel="stylesheet" href="css/ar.css" />
+        <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+        <script
+            src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+    </head>
+    <body>
+
+        <button id="back-btn" onclick="history.back()">← Back</button>
+        <div id="car-name-label">Loading...</div>
+
+        <a-scene
+            mindar-image="imageTargetSrc: assets/targets/marker.mind;"
+            color-space="sRGB"
+            renderer="colorManagement: true, physicallyCorrectLights: true"
+            vr-mode-ui="enabled: false"
+            device-orientation-permission-ui="enabled: false">
+            <a-camera position="0 0 0"
+                look-controls="enabled: false"></a-camera>
+
+            <a-entity mindar-image-target="targetIndex: 0">
+                <a-box
+                    position="0 0 0"
+                    rotation="0 0 0"
+                    scale="0.1 0.1 0.1"
+                    color="#f59e0b"
+                    opacity="0.8"></a-box>
+            </a-entity>
+        </a-scene>
+
+        <script src="js/ar.js"></script>
+
+    </body>
+</html>
