@@ -48,12 +48,6 @@ car.setAttribute('gltf-model', modelPath(carNode));
 wrapper.appendChild(car);
 target.appendChild(wrapper);
 
-// DEBUG: remove later
-const debugBox = document.createElement('a-box');
-debugBox.setAttribute('scale', '0.2 0.2 0.2');
-debugBox.setAttribute('color', 'red');
-wrapper.appendChild(debugBox);
-
 // Center and scale the car once loaded
 car.addEventListener('model-loaded', () => {
     const model = car.getObject3D('mesh');
