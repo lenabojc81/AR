@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <title>Lane Dodger</title>
+        <link rel="stylesheet" href="css/game.css" />
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+    </head>
+    <body>
+
+        <div id="game"></div>
+
+        <div id="hud">
+            <a id="back-btn" href="index.html">← Garage</a>
+            <div id="car-name">Loading…</div>
+        </div>
+
+        <div id="loading-screen">
+            <div id="lottie-container"></div>
+            <p id="loading-text">Warming up the engine…</p>
+        </div>
+
+        <script>
+            lottie.loadAnimation({
+                container: document.getElementById('lottie-container'),
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                path: 'assets/loader.json'
+            });
+        </script>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+                }
+            }
+        </script>
+
+        <script type="module" src="js/game.js"></script>
+
+    </body>
+</html>

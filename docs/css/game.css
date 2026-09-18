@@ -1,0 +1,106 @@
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-dark:      #1a0f08;
+    --bg-mid:       #2d2016;
+    --amber:        #f59e0b;
+    --cream:        #fef3c7;
+    --cream-dim:    rgba(254, 243, 199, 0.6);
+    --glass:        rgba(0, 0, 0, 0.45);
+    --glass-border: rgba(255, 255, 255, 0.12);
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;   /* no pull-to-refresh while swiping */
+    background: var(--bg-dark);
+    color: var(--cream);
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ── GAME CANVAS ── */
+#game {
+    position: fixed;
+    inset: 0;
+    touch-action: none;          /* swipes go to the game, not the page */
+}
+
+#game canvas {
+    display: block;
+}
+
+/* ── HUD ── */
+#hud {
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+}
+
+#back-btn,
+#car-name {
+    pointer-events: auto;
+    padding: 8px 14px;
+    border-radius: 100px;
+    border: 1px solid var(--glass-border);
+    background: var(--glass);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    font-size: 14px;
+}
+
+#back-btn {
+    color: var(--cream);
+    text-decoration: none;
+}
+
+#car-name {
+    color: var(--amber);
+    font-weight: 600;
+}
+
+/* ── LOADING ── */
+#loading-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--bg-dark);
+    transition: opacity 0.5s ease;
+}
+
+#loading-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#lottie-container {
+    width: 200px;
+    height: 200px;
+}
+
+#lottie-container svg [fill]:not([fill="none"])     { fill: var(--amber); }
+#lottie-container svg [stroke]:not([stroke="none"]) { stroke: var(--amber); }
+
+#loading-text {
+    color: var(--amber);
+    font-size: 15px;
+    letter-spacing: 0.05em;
+    text-align: center;
+    padding: 0 24px;
+}
