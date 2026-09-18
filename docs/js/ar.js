@@ -20,6 +20,9 @@ const CAR_NAMES = [
 const target = document.querySelector('#target');
 const status = document.querySelector('#status');
 const label = document.getElementById('car-name-label');
+const sceneEl = document.querySelector('a-scene');
+const onboarding = document.getElementById('onboarding');
+const screenshotBtn = document.getElementById('screenshot-btn');
 
 // URL param -> localStorage -> default (Car 1)
 function getCarIndex() {
@@ -80,12 +83,62 @@ car.addEventListener('model-error', () => {
 });
 
 target.addEventListener('targetFound', () => {
-    console.log("Marker found");
+    console.log('Marker found');
     status.textContent = 'Marker found!';
+
+    // First detection: hide onboarding, show screenshot button
+    if (onboarding) {
+        onboarding.classList.add('hidden');
+        onboarding.addEventListener('transitionend', () => onboarding.remove(), { once: true });
+    }
+    screenshotBtn.hidden = false;
 });
 target.addEventListener('targetLost', () => {
     console.log("Marker lost");
     status.textContent = 'Marker lost!';
 });
+
+// ---------- Screenshot ----------
+// MindAR shows the camera in a <video> behind the 3D canvas,
+// so we draw both onto one canvas to get the full picture.
+function takeScreenshot() {
+    const video = document.querySelector('video');
+    const glCanvas = sceneEl.canvas;
+
+    const dpr = window.devicePixelRatio || 1;
+    const out = document.createElement('canvas');
+    out.width = window.innerWidth * dpr;
+    out.height = window.innerHeight * dpr;
+    const ctx = out.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    // 1. Camera image
+    if (video) {
+        const r = video.getBoundingClientRect();
+        ctx.drawImage(video, r.left, r.top, r.width, r.height);
+    }
+
+    // 2. The car (render a fresh frame so the canvas isn't blank)
+    sceneEl.renderer.render(sceneEl.object3D, sceneEl.camera);
+    const c = glCanvas.getBoundingClientRect();
+    ctx.drawImage(glCanvas, c.left, c.top, c.width, c.height);
+
+    // 3. Download
+    out.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = CAR_NAMES[carIndex].replace(/\s+/g, '-').toLowerCase() + '-ar.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        screenshotBtn.textContent = 'Saved ✓';
+        setTimeout(() => (screenshotBtn.textContent = '📷 Save photo'), 1500);
+    }, 'image/png');
+}
+
+screenshotBtn.addEventListener('click', takeScreenshot);
 
 console.log('AR page loaded for car:', carNode);

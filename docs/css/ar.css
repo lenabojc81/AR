@@ -47,7 +47,7 @@ body {
 
 #status {
     position: fixed;
-    bottom: 20px;
+    bottom: 90px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
@@ -57,3 +57,51 @@ body {
     color: #fff;
     background: rgba(0, 0, 0, 0.6);
 }
+
+/* Onboarding overlay */
+#onboarding {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font: 18px system-ui, sans-serif;
+    text-align: center;
+    pointer-events: none; /* taps go through to the back button */
+    transition: opacity 0.4s;
+}
+#onboarding img {
+    width: min(60vw, 260px);
+    border-radius: 8px;
+    animation: pulse 1.6s ease-in-out infinite;
+}
+#onboarding.hidden { opacity: 0; }
+
+@keyframes pulse { 50% { transform: scale(1.05); } }
+@media (prefers-reduced-motion: reduce) {
+    #onboarding img { animation: none; }
+}
+
+/* Screenshot button */
+#screenshot-btn {
+    position: fixed;
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    padding: 14px 24px;
+    border: none;
+    border-radius: 999px;
+    background: #fff;
+    color: #111;
+    font: 16px system-ui, sans-serif;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+#screenshot-btn[hidden] { display: none; }
