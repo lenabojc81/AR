@@ -106,3 +106,38 @@ body {
     cursor: pointer;
 }
 #screenshot-btn[hidden] { display: none; }
+
+/* ── FLYING GUY BUTTON (his head) ── */
+#flyer-btn {
+    position: fixed;
+    left: 16px;
+    bottom: calc(24px + env(safe-area-inset-bottom));
+    z-index: 30;                 /* above the onboarding overlay */
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    border: 2px solid #f59e0b;
+    border-radius: 50%;
+    background: rgba(26, 15, 8, 0.7);
+    overflow: hidden;
+    cursor: pointer;
+    animation: flyer-pulse 1.8s ease-in-out infinite;
+}
+
+#flyer-btn img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#flyer-btn[hidden] { display: none; }
+
+/* soft amber glow that grows and fades - "tap me" */
+@keyframes flyer-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); transform: scale(1); }
+    50%      { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); transform: scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #flyer-btn { animation: none; }
+}

@@ -21,9 +21,9 @@ const CAR_NODES = [
 ];
 
 const CAR_NAMES = [
-    'The Bumblebee', 'The Crimson Dart', 'Shadow Racer', 'The Brick',
-    'Tangerine Dream', 'Desert Fox', 'Blue Thunder',
-    'La Rossa', 'Night Cruiser', 'Officer Wheels',
+    'Čmrl', 'Šopski', 'Night Rider', 'Delam na črno',
+    'Sinek moj zlati', 'Kládivo', 'Bugatti',
+    'Češplja', 'Vin Benzin', 'Svia policia',
 ];
 
 let currentIndex = 0;

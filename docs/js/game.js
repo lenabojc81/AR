@@ -28,6 +28,13 @@ let ACCELERATION = 0.5;   // speed gained per second (20 -> 40 takes 40 s)
 const MAX_SPEED = 500;
 const HIT_COOLDOWN = 1.5;   // seconds of protection after the first hit
 
+// Flying coffee guy (decoration only - can't be hit)
+const FLYER_SCALE = 0.6;         // size compared to the obstacles
+const FLYER_SPEED = 7;           // cruising speed
+const DIVE_EVERY = [10, 18];     // seconds between screen crashes (random in this range)
+const DIVE_TIME = 0.9;           // how long the dive at the screen takes
+const FLYER_SOUND = false;       // true = play his hit sound when he smacks the screen
+
 let hits = 0;
 let invincibleUntil = 0;
 let gameOver = false;
@@ -426,6 +433,128 @@ function renderPortrait(template) {
     return url;
 }
 
+// ---------- Flying coffee guy ----------
+const flyer = {
+    obj: null, template: null, height: 1,
+    state: 'cruise', timer: 0, nextDive: 0,
+    pos: new THREE.Vector3(0, 6, -30),
+    vel: new THREE.Vector3(),
+    goal: new THREE.Vector3(),
+    from: new THREE.Vector3(),
+    to: new THREE.Vector3(),
+};
+const _v = new THREE.Vector3();
+const _w = new THREE.Vector3();
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function createFlyer(template) {
+    flyer.template = template;
+    flyer.obj = template.clone();                 // own copy, separate from the obstacle pool
+    flyer.obj.scale.multiplyScalar(FLYER_SCALE);
+    flyer.obj.visible = false;                    // appears when the game starts
+    scene.add(flyer.obj);
+    flyer.height = new THREE.Box3().setFromObject(flyer.obj).getSize(_v).y;
+    pickFlyerGoal();
+    scheduleDive();
+}
+
+// Random point to fly to: far or close, left or right, low or high
+function pickFlyerGoal() {
+    flyer.goal.set(rand(-7, 7), rand(2, 7), rand(-45, -2));
+}
+
+function scheduleDive() {
+    flyer.nextDive = clock.elapsedTime + rand(DIVE_EVERY[0], DIVE_EVERY[1]);
+}
+
+// Just in front of the lens, with his face (not his feet) in the middle of the view
+function crashPoint(out) {
+    camera.getWorldDirection(_w);
+    out.copy(camera.position).addScaledVector(_w, 1.2);
+    out.y -= flyer.height * 0.8;
+    return out;
+}
+
+function faceCamera() {
+    _w.copy(camera.position);
+    _w.y -= flyer.height * 0.8;                   // keeps him upright while staring at you
+    flyer.obj.lookAt(_w);
+}
+
+// True while he blocks the view - collisions are forgiven then
+function flyerCovering() {
+    const s = flyer.state, t = flyer.timer;
+    return (s === 'dive' && t > DIVE_TIME * 0.6) || s === 'splat' || (s === 'exit' && t < 0.3);
+}
+
+function updateFlyer(dt, t) {
+    const f = flyer;
+    if (!f.obj) return;
+    f.obj.visible = true;
+    f.timer += dt;
+
+    if (f.state === 'cruise') {
+        // Steer smoothly toward the goal, pick a new one when close
+        _v.copy(f.goal).sub(f.pos);
+        if (_v.length() < 2) pickFlyerGoal();
+        _v.setLength(FLYER_SPEED);
+        f.vel.lerp(_v, 1 - Math.exp(-1.5 * dt));
+        f.pos.addScaledVector(f.vel, dt);
+        if (!gameOver && t > f.nextDive) { f.state = 'windup'; f.timer = 0; }
+
+    } else if (f.state === 'windup') {           // brake and turn to the player
+        f.vel.multiplyScalar(Math.exp(-6 * dt));
+        f.pos.addScaledVector(f.vel, dt);
+        if (f.timer > 0.5) {
+            f.state = 'dive'; f.timer = 0;
+            f.from.copy(f.pos);
+            crashPoint(f.to);
+        }
+
+    } else if (f.state === 'dive') {             // accelerate straight at the screen
+        const p = Math.min(f.timer / DIVE_TIME, 1);
+        f.pos.lerpVectors(f.from, f.to, p * p * p);
+        if (p >= 1) {
+            f.state = 'splat'; f.timer = 0;
+            if (FLYER_SOUND) playSound(obstacleSounds.get(f.template));
+        }
+
+    } else if (f.state === 'splat') {            // squashed against the glass
+        f.pos.copy(f.to);
+        f.pos.x += rand(-0.03, 0.03);
+        f.pos.y += rand(-0.03, 0.03);
+        if (f.timer > 0.4) {
+            f.state = 'exit'; f.timer = 0;
+            f.from.copy(f.to);
+            f.to.set(Math.random() < 0.5 ? -10 : 10, rand(5, 8), rand(-15, -8));  // off to one side
+        }
+
+    } else if (f.state === 'exit') {             // zoom away, then fly normally again
+        const p = Math.min(f.timer / 0.8, 1);
+        f.pos.lerpVectors(f.from, f.to, 1 - (1 - p) * (1 - p));   // fast start, soft end
+        if (p >= 1) {
+            f.state = 'cruise'; f.timer = 0;
+            f.vel.subVectors(f.to, f.from).setLength(FLYER_SPEED);
+            pickFlyerGoal();
+            scheduleDive();
+        }
+    }
+
+    // Position, bobbing and facing
+    const obj = f.obj;
+    obj.position.copy(f.pos);
+    if (f.state === 'cruise') obj.position.y += Math.sin(t * 3) * 0.15;
+
+    if (f.state === 'windup' || f.state === 'dive' || f.state === 'splat') {
+        faceCamera();
+    } else {
+        const dir = f.state === 'exit' ? _v.subVectors(f.to, f.from) : f.vel;
+        _w.copy(obj.position).add(dir);
+        obj.lookAt(_w);                                              // face where he's flying
+        obj.rotateZ(THREE.MathUtils.clamp(-f.vel.x * 0.08, -0.5, 0.5));  // bank into turns
+    }
+}
+
 // Load every model + its sound
 Promise.all(
     OBSTACLE_TYPES.map((type) =>
@@ -455,6 +584,8 @@ Promise.all(
             img.src = portrait;
             img.hidden = false;
         });
+
+        createFlyer(loaded[0]);   // flying coffee guy uses the first obstacle model
     }
     console.log('Obstacle types loaded:', loaded.length);
 });
@@ -534,6 +665,7 @@ function updateObstacles(move) {
 //         }
 //     }
 // }
+// Car and obstacles are compared as flat rectangles on the road
 function checkCollisions(move) {
     const reachX = carHalfWidth * HITBOX_FORGIVENESS + OBSTACLE_SIZE.w / 2;
     const reachZ = carHalfLength * HITBOX_FORGIVENESS + OBSTACLE_SIZE.d / 2;
@@ -550,7 +682,7 @@ function checkCollisions(move) {
 
         if (overlapX && overlapZ) {
             box.userData.hit = true;
-            handleHit(box);
+            if (!flyerCovering()) handleHit(box);   // free pass while he blocks the view
         }
     }
 }
@@ -743,6 +875,8 @@ function resetGame() {
     speed = START_SPEED;
     distance = 0;
 
+    if (flyer.obj) scheduleDive();
+
     lane = 0;
     player.position.x = 0;
     player.rotation.set(0, 0, 0);
@@ -833,7 +967,7 @@ function handleHit(obstacle) {
         ? obstacleSounds.get(t)
         : obstacleCrashSounds.get(t) || obstacleSounds.get(t);
     const hitLength = playSound(sound);
-    
+
     if (hits === 1) {
         duckMusic(hitLength);
         // First hit: half speed, but never below the starting speed
@@ -857,6 +991,7 @@ renderer.setAnimationLoop(() => {
         renderer.render(scene, camera);
         return;
     }
+    updateFlyer(dt, clock.elapsedTime);
     // Slowly speed up
     if (!gameOver) {
         speed = Math.min(speed + ACCELERATION * dt, MAX_SPEED);
